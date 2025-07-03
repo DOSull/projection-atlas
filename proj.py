@@ -35,7 +35,7 @@ def _(geom, gpd):
 
 @app.cell
 def _(get_globe, get_graticule, gpd):
-    world = gpd.read_file("https://naciscdn.org/naturalearth/110m/physical/ne_110m_land.zip")
+    world = gpd.read_file("https://raw.githubusercontent.com/DOSull/projection-atlas/refs/heads/main/app/ne.geojson")
     globe = gpd.GeoDataFrame(geometry = gpd.GeoSeries([get_globe()]), crs = 4326)
     graticule = get_graticule()
     return globe, graticule, world
