@@ -140,7 +140,7 @@ def _(mo):
 
 
 @app.cell
-def _(geom, gpd):
+def _(geom, gpd, np):
     def get_parallel(lat):
         lons = [-179.9] + list(range(-179, 180)) + [179.9]
         return geom.LineString([(lon, lat) for lon in lons])
@@ -166,8 +166,7 @@ def _(geom, gpd):
                       for y in range( -75,  76, 15)]
         lats = [xy[1] for xy in xys]
         xy = gpd.GeoSeries([geom.Point(xy) for xy in xys], crs = 4326).to_crs("+proj=merc")
-        return xy.buffer(4e5).to_crs(4326)
-    
+        return gpd.GeoSeries([xy.buffer(3e5 / np.cos(lat * np.pi / 180)) for xy, lat in zip(xy, lats)], crs = "+proj=merc").to_crs(4326)
     return get_globe, get_graticule, get_indicatrix, get_meridian, get_parallel
 
 
@@ -187,7 +186,8 @@ def _():
     import geopandas as gpd
     import shapely.geometry as geom
     import matplotlib.pyplot as plt
-    return geom, gpd, plt
+    import numpy as np
+    return geom, gpd, np, plt
 
 
 @app.cell
