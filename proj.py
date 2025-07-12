@@ -1,51 +1,69 @@
 import marimo
 
-__generated_with = "0.11.30"
-app = marimo.App(width="medium", layout_file="layouts/proj.grid.json")
+__generated_with = "0.14.10"
+app = marimo.App(width="columns", layout_file="layouts/proj.grid.json")
+
+
+@app.cell(column=0)
+def _(geom, get_globe, get_graticule, get_indicatrix, gpd):
+    world = gpd.read_file("https://raw.githubusercontent.com/DOSull/projection-atlas/refs/heads/main/app/ne.geojson")
+    world.geometry = gpd.GeoSeries(
+        [geom.LineString(s.exterior).segmentize(1) 
+         for s in world.geometry])
+    globe = get_globe()
+    graticule = get_graticule()
+    indicatrix = get_indicatrix()
+    return globe, graticule, indicatrix, world
 
 
 @app.cell
-def _(mo):
-    show_indicatrix = mo.ui.switch(True)
-    mo.md(f"Show indicatrix {show_indicatrix}")
-    return (show_indicatrix,)
+def _(geom, gpd, np):
+    def get_parallel(lat):
+        lons = [-179.9] + list(range(-179, 180)) + [179.9]
+        return geom.LineString([(lon, lat) for lon in lons])
+
+    def get_meridian(lon):
+        lats = [-89.9] + list(range(-89, 90)) + [89.9]
+        return geom.LineString([(lon, lat) for lat in lats])
+
+    def get_graticule(spacing = 15):
+        return gpd.GeoSeries(
+            [get_parallel(lon) 
+             for lon in range(-90, 91, spacing)] +
+            [get_meridian(lat) 
+             for lat in range(-180, 181, spacing)], 
+            crs = 4326)
+
+    def get_globe():
+        return gpd.GeoSeries(
+            [geom.Polygon([(x, y) for x, y in zip(
+                [-180] * 180 + 
+                [_ for _ in range(-180, 180)] + 
+                [ 180] * 180 + 
+                [_ for _ in range(180, -180, -1)],
+                [_ for _ in range(-90,90)] + 
+                [ 90] * 360 + 
+                [_ for _ in range(90, -90, -1)] + 
+                [-90] * 360)])],
+            crs = 4326)
+
+    def get_indicatrix():
+        xys = [(x, y) for x in range(-165, 166, 15)
+                      for y in range( -75,  76, 15)]
+        lats = [xy[1] for xy in xys]
+        xy = gpd.GeoSeries(
+            [geom.Point(xy) for xy in xys], 
+            crs = 4326).to_crs("+proj=merc")
+        return gpd.GeoSeries(
+            [xy.buffer(3e5 / np.cos(lat * np.pi / 180)) 
+             for xy, lat in zip(xy, lats)], 
+            crs = "+proj=merc").to_crs(4326)
+    return get_globe, get_graticule, get_indicatrix
 
 
 @app.cell
-def _(mo):
-    show_graticule = mo.ui.switch(True)
-    mo.md(f"Show graticule {show_graticule}")
-    return (show_graticule,)
-
-
-@app.cell(hide_code=True)
-def _(
-    globe,
-    graticule,
-    indicatrix,
-    plt,
-    proj,
-    show_graticule,
-    show_indicatrix,
-    world,
-):
-    _crs = proj.value
-    _fig = plt.figure(figsize=(14, 7))
-    _ax = _fig.add_subplot(111)
-    _ax.set_axis_off()
-    globe.to_crs(crs = _crs).plot(ax = _ax, fc = "#00000000", lw = 0)
-    world.to_crs(crs = _crs).plot(ax = _ax, ec = "k", lw = 0.5)
-    if show_graticule.value:
-        graticule.to_crs(crs = _crs).plot(ax = _ax, fc = "#00000000", ec = "#666666", lw = 0.2)
-    if show_indicatrix.value:
-        indicatrix.to_crs(crs = _crs).plot(ax = _ax, fc = "#ff000040", lw = 0)
-    _ax
-    return
-
-
-@app.cell
-def _(mo):
-    _dict = {
+def _():
+    dict = {
         "WGS84": "+proj=lonlat",
         "Adams World in a Square": "+proj=adams_ws1",
         "Adams World in a Square II": "+proj=adams_ws2",
@@ -134,51 +152,7 @@ def _(mo):
         "Winkel I": "+proj=wink1",
         "Winkel II": "+proj=wink2",
     }
-    proj = mo.ui.dropdown(options = _dict, value = "WGS84")
-    proj
-    return (proj,)
-
-
-@app.cell
-def _(geom, gpd, np):
-    def get_parallel(lat):
-        lons = [-179.9] + list(range(-179, 180)) + [179.9]
-        return geom.LineString([(lon, lat) for lon in lons])
-
-    def get_meridian(lon):
-        lats = [-89.9] + list(range(-89, 90)) + [89.9]
-        return geom.LineString([(lon, lat) for lat in lats])
-
-    def get_graticule(spacing = 15):
-        return gpd.GeoSeries(
-            [get_parallel(lon) for lon in range(-90, 91, spacing)] +
-            [get_meridian(lat) for lat in range(-180, 181, spacing)], crs = 4326)
-
-    def get_globe():
-        return gpd.GeoSeries([geom.Polygon([(x, y) for x, y in zip(
-            [-180] * 180 + [_ for _ in range(-180, 180)] + 
-            [ 180] * 180 + [_ for _ in range(180, -180, -1)],
-            [_ for _ in range(-90,90)]      + [ 90] * 360 + 
-            [_ for _ in range(90, -90, -1)] + [-90] * 360)])], crs = 4326)
-
-    def get_indicatrix():
-        xys = [(x, y) for x in range(-165, 166, 15)
-                      for y in range( -75,  76, 15)]
-        lats = [xy[1] for xy in xys]
-        xy = gpd.GeoSeries([geom.Point(xy) for xy in xys], crs = 4326).to_crs("+proj=merc")
-        return gpd.GeoSeries([xy.buffer(3e5 / np.cos(lat * np.pi / 180)) for xy, lat in zip(xy, lats)], crs = "+proj=merc").to_crs(4326)
-    return get_globe, get_graticule, get_indicatrix, get_meridian, get_parallel
-
-
-@app.cell
-def _(geom, get_globe, get_graticule, get_indicatrix, gpd):
-    world = gpd.read_file("https://raw.githubusercontent.com/DOSull/projection-atlas/refs/heads/main/app/ne.geojson")
-    world.geometry = gpd.GeoSeries(
-        [geom.LineString(s.exterior).segmentize(1) for s in world.geometry])
-    globe = get_globe()
-    graticule = get_graticule()
-    indicatrix = get_indicatrix()
-    return globe, graticule, indicatrix, world
+    return (dict,)
 
 
 @app.cell
@@ -194,6 +168,52 @@ def _():
 def _():
     import marimo as mo
     return (mo,)
+
+
+@app.cell(column=1)
+def _(
+    globe,
+    graticule,
+    indicatrix,
+    plt,
+    proj,
+    show_graticule,
+    show_indicatrix,
+    world,
+):
+    _crs = proj.value
+    _fig = plt.figure(figsize=(14, 7))
+    _ax = _fig.add_subplot(111)
+    _ax.set_axis_off()
+    globe.to_crs(crs = _crs).plot(ax = _ax, fc = "#00000000", lw = 0)
+    world.to_crs(crs = _crs).plot(ax = _ax, ec = "k", lw = 0.5)
+    if show_graticule.value:
+        graticule.to_crs(crs = _crs).plot(ax = _ax, fc = "#00000000", ec = "#666666", lw = 0.2)
+    if show_indicatrix.value:
+        indicatrix.to_crs(crs = _crs).plot(ax = _ax, fc = "#ff000040", lw = 0)
+    _ax
+    return
+
+
+@app.cell
+def _(dict, mo):
+    proj = mo.ui.dropdown(options = dict, value = "WGS84")
+    proj
+    return (proj,)
+
+
+@app.cell
+def _(mo):
+    show_indicatrix = mo.ui.switch(True)
+    mo.md(f"Show indicatrix {show_indicatrix}")
+    return (show_indicatrix,)
+
+
+@app.cell
+def _(mo):
+    show_graticule = mo.ui.switch(True)
+    mo.md(f"Show graticule {show_graticule}")
+    return (show_graticule,)
 
 
 if __name__ == "__main__":
